@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>行李清單</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- 載入 Firebase SDK (Compat 模式，適用於單一 HTML 檔案) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+<style>
+  :root {
+    --ink: #33474A;
+    --paper: #EAF4F0;
+    --paper-2: #DCEBE5;
+    --card-bg: #F6FBF9;
+    --tag-string: #82A099;
+    --accent: #6F9A87;
+    --accent-2: #7FA8C9;
+    --shared-color: #7FA8C9;
+    --on-accent: #FBFEFC;
+    --line: #33474A;
+    --line-soft: rgba(51,71,74,0.13);
+    --dot: rgba(51,71,74,0.04);
+    --shadow: rgba(0,0,0,0.08);
+    --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #E4EFEC; --paper: #16211F; --paper-2: #1E2B28; --card-bg: #243330;
+      --tag-string: #8FA8A1; --accent: #7FAF97; --accent-2: #7FA0C4;
+      --shared-color: #7FA0C4; --on-accent: #16211F;
+      --line: #E4EFEC; --line-soft: rgba(228,239,236,0.12); --dot: rgba(228,239,236,0.045);
+      --shadow: rgba(0,0,0,0.5);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background-color: var(--paper); color: var(--ink);
+    background-image: radial-gradient(var(--dot) 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
+    font-family: var(--font-display); min-height: 100vh;
+    padding: 32px 16px 80px; transition: background-color 0.3s, color 0.3s;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  .hero-illustration {
+    width: 100%; height: 150px; border-radius: 16px; overflow: hidden;
+    margin-bottom: 18px; border: 1.5px solid var(--line-soft);
+  }
+  .hero-illustration svg { width: 100%; height: 100%; display: block; }
+  .banner {
+    display: none; background: var(--paper-2); border: 1.5px dashed var(--line);
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 18px;
+    font-size: 13px; line-height: 1.5;
+  }
+  .banner.show { display: block; }
+  .tag {
+    position: relative; background: var(--paper-2); border: 1.5px solid var(--line);
+    border-radius: 14px; padding: 28px 26px 22px; margin-bottom: 18px;
+  }
+  .tag::before {
+    content: ""; position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+    width: 3px; height: 22px; background: var(--tag-string); border-radius: 2px;
+  }
+  .tag::after {
+    content: ""; position: absolute; top: 14px; left: 24px; width: 9px; height: 9px;
+    border: 1.5px solid var(--line); border-radius: 50%; background: var(--paper);
+  }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--accent-2); margin: 0 0 6px 22px; }
+  .trip-name {
+    font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15;
+    border: none; background: transparent; color: var(--ink); width: 100%;
+    padding: 0 0 0 22px; outline: none;
+  }
+  .meta-row { display: flex; gap: 14px; margin: 14px 0 16px 22px; flex-wrap: wrap; }
+  .meta-field { display: flex; flex-direction: column; gap: 3px; }
+  .meta-field label { font-family: var(--font-mono); font-size: 10px; color: var(--ink); opacity: 0.55; }
+  .meta-field input {
+    font-family: var(--font-mono); font-size: 13px; border: none;
+    border-bottom: 1px solid var(--line-soft); background: transparent;
+    color: var(--ink); padding: 2px 0; outline: none; width: 150px;
+  }
+  .people-row { display: flex; align-items: center; gap: 8px; margin: 0 22px 16px; flex-wrap: wrap; }
+  .people-label { font-family: var(--font-mono); font-size: 10px; opacity: 0.55; margin-right: 2px; }
+  .avatar-chip {
+    display: flex; align-items: center; gap: 5px;
+    background: var(--card-bg); border: 1px solid var(--line-soft);
+    border-radius: 999px; padding: 4px 10px; font-size: 11.5px;
+  }
+  .avatar-chip.you { border-color: var(--accent); font-weight: 600; }
+  .chip-edit { border: none; background: transparent; cursor: pointer; opacity: 0.5; font-size: 10px; }
+  .stats-row { margin: 0 22px; }
+  .stat-label { font-family: var(--font-mono); font-size: 11px; opacity: 0.6; margin-bottom: 4px; }
+  .progress-line { display: flex; align-items: center; gap: 10px; }
+  .progress-track { flex: 1; height: 6px; background: var(--line-soft); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent-2); width: 0%; transition: width 0.35s ease; border-radius: 3px; }
+  .progress-count { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; opacity: 0.8; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 2px 4px; margin-bottom: 6px; }
+  .tabs-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .filter-btn {
+    flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; padding: 8px 14px;
+    border: 1.5px solid var(--line-soft); border-radius: 999px; background: transparent;
+    color: var(--ink); cursor: pointer; opacity: 0.75; margin-top: 2px;
+  }
+  .filter-btn.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); opacity: 1; }
+  .tab-btn {
+    flex-shrink: 0; font-family: var(--font-mono); font-size: 12.5px; padding: 8px 14px;
+    border: 1.5px solid var(--line); border-radius: 999px; background: transparent;
+    color: var(--ink); cursor: pointer; white-space: nowrap;
+  }
+  .tab-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .add-form { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .add-form input[type="text"] {
+    flex: 1 1 160px; min-width: 0; padding: 12px 14px; border: 1.5px solid var(--line);
+    border-radius: 9px; background: var(--paper-2); color: var(--ink);
+    font-family: var(--font-display); font-size: 15px; outline: none;
+  }
+  .add-form select {
+    padding: 12px 10px; border: 1.5px solid var(--line); border-radius: 9px;
+    background: var(--paper-2); color: var(--ink); font-family: var(--font-mono); font-size: 13px; outline: none;
+  }
+  .add-form button {
+    padding: 12px 20px; border: 1.5px solid var(--line); border-radius: 9px;
+    background: var(--accent); color: var(--on-accent); font-family: var(--font-display);
+    font-weight: 600; font-size: 15px; cursor: pointer;
+  }
+  .type-toggle { display: flex; gap: 6px; margin-bottom: 16px; }
+  .type-toggle button {
+    font-family: var(--font-mono); font-size: 12px; padding: 7px 12px;
+    border: 1.5px solid var(--line-soft); border-radius: 7px; background: transparent;
+    color: var(--ink); opacity: 0.6; cursor: pointer;
+  }
+  .type-toggle button.active { opacity: 1; border-color: var(--ink); }
+  .type-toggle .assignee-select {
+    font-family: var(--font-mono); font-size: 12px; padding: 6px 8px;
+    border: 1.5px solid var(--line-soft); border-radius: 7px; background: var(--paper-2); color: var(--ink);
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .card {
+    background: var(--card-bg); border: 1.5px solid var(--line); border-radius: 12px;
+    overflow: hidden; position: relative; display: flex; flex-direction: column;
+  }
+  .card.shared { border-color: var(--shared-color); }
+  .type-badge {
+    align-self: flex-start; font-family: var(--font-mono); font-size: 9.5px;
+    padding: 3px 8px; border-radius: 999px; color: var(--on-accent); font-weight: 600;
+    border: none; cursor: pointer; opacity: 0.92;
+  }
+  .type-badge.shared { background: var(--shared-color); }
+  .type-badge.individual { background: var(--accent); }
+  .card-body { padding: 12px 12px 13px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+  .card-name {
+    font-size: 13.5px; font-weight: 500; line-height: 1.3; border: none; background: transparent;
+    color: var(--ink); outline: none; width: 100%; padding: 0; font-family: var(--font-display);
+  }
+  .card.done .card-name { text-decoration: line-through; opacity: 0.5; }
+  .assignee-line-select {
+    font-family: var(--font-mono); font-size: 10.5px; padding: 4px 6px;
+    border: 1px solid var(--line-soft); border-radius: 6px;
+    background: var(--paper-2); color: var(--ink); outline: none; width: 100%;
+  }
+  .card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; gap: 6px; }
+  .pack-btn {
+    font-family: var(--font-mono); font-size: 10.5px; border: 1.5px solid var(--line); border-radius: 7px;
+    background: transparent; color: var(--ink); padding: 5px 8px; cursor: pointer; flex: 1;
+  }
+  .card.done .pack-btn { background: var(--accent-2); border-color: var(--accent-2); color: var(--on-accent); }
+  .card-del { border: none; background: transparent; color: var(--ink); opacity: 0.35; cursor: pointer; font-size: 14px; padding: 4px; }
+  .indiv-progress { font-family: var(--font-mono); font-size: 10px; opacity: 0.55; }
+  .cat-label { font-size: 12px; font-weight: 600; margin: 22px 0 10px; opacity: 0.75; display: flex; align-items: center; gap: 8px; }
+  .cat-label .rule { flex: 1; height: 1px; background: var(--line-soft); }
+  .empty { text-align: center; padding: 60px 20px; opacity: 0.55; font-size: 14px; }
+  .reset-row { text-align: center; margin-top: 40px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .reset-row button {
+    border: none; background: transparent; color: var(--ink); opacity: 0.5;
+    font-family: var(--font-mono); font-size: 12px; cursor: pointer; text-decoration: underline;
+  }
+  .hint { font-family: var(--font-mono); font-size: 11px; opacity: 0.5; margin: 0 0 20px 2px; }
+  .inline-add-cat { display: flex; gap: 8px; margin: -4px 0 14px; flex-wrap: wrap; }
+  .inline-add-cat input {
+    flex: 1 1 160px; padding: 10px 12px; border: 1.5px solid var(--accent);
+    border-radius: 8px; background: var(--paper-2); color: var(--ink);
+    font-family: var(--font-display); font-size: 14px; outline: none;
+  }
+  .inline-add-cat button {
+    font-family: var(--font-mono); font-size: 12.5px; padding: 9px 14px;
+    border: 1.5px solid var(--line); border-radius: 8px; cursor: pointer;
+  }
+  #newCatConfirm { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .reset-confirm {
+    margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    justify-content: center; font-family: var(--font-mono); font-size: 12px; opacity: 0.85;
+  }
+  .reset-confirm button {
+    font-family: var(--font-mono); font-size: 12px; padding: 6px 12px;
+    border-radius: 7px; cursor: pointer; border: 1.5px solid var(--line);
+  }
+  #resetConfirmYes { background: var(--accent-2); color: var(--on-accent); border-color: var(--accent-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero-illustration">
+    <svg viewBox="0 0 800 220" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#BFE3DF"/>
+          <stop offset="100%" stop-color="#F3F8EC"/>
+        </linearGradient>
+        <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#CDE7E1"/>
+          <stop offset="100%" stop-color="#E9F4EE"/>
+        </linearGradient>
+      </defs>
+      <rect width="800" height="220" fill="url(#skyGrad)"/>
+      <circle cx="655" cy="52" r="32" fill="#F2CE9A" opacity="0.9"/>
+      <polygon points="-20,145 120,55 260,145" fill="#B7D0DE"/>
+      <polygon points="180,145 330,40 480,145" fill="#A7C6D2"/>
+      <polygon points="410,145 560,65 700,145" fill="#B7D0DE"/>
+      <polygon points="-20,150 150,72 320,150" fill="#7FA08F"/>
+      <polygon points="270,150 440,62 610,150" fill="#6C9384"/>
+      <polygon points="540,150 700,80 820,150" fill="#7FA08F"/>
+      <rect x="0" y="150" width="800" height="70" fill="url(#waterGrad)"/>
+    </svg>
+  </div>
+
+  <div class="banner" id="banner"></div>
+
+  <div class="tag">
+    <p class="eyebrow">PACKING · 行李清單</p>
+    <input class="trip-name" id="tripName" placeholder="這趟旅程叫什麼名字？" />
+    <div class="meta-row">
+      <div class="meta-field"><label>目的地</label><input type="text" id="destination" placeholder="例如：大阪"></div>
+      <div class="meta-field"><label>出發日</label><input type="date" id="departDate"></div>
+    </div>
+    <div class="people-row" id="peopleRow"></div>
+    <div class="stats-row">
+      <div class="stat-label">整體打包進度</div>
+      <div class="progress-line">
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <span class="progress-count" id="progressCount">0 / 0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs-row">
+    <div class="tabs" id="tabs"></div>
+    <button type="button" id="filterUnpackedBtn" class="filter-btn">📦 只看未打包</button>
+  </div>
+
+  <form class="add-form" id="addForm">
+    <input type="text" id="itemInput" placeholder="新增物品，例如：充電器" autocomplete="off">
+    <select id="categorySelect"></select>
+    <button type="submit">加入</button>
+  </form>
+  <div class="type-toggle" id="typeToggle">
+    <button type="button" data-type="individual" class="active">👤 各自帶</button>
+    <button type="button" data-type="shared">👥 共用一份就好</button>
+    <select class="assignee-select" id="assigneeSelect" style="display:none;">
+      <option value="">不指定由誰帶</option>
+    </select>
+  </div>
+
+  <div class="inline-add-cat" id="newCatRow" style="display:none;">
+    <input type="text" id="newCatInput" placeholder="新分類名稱，例如：藥品">
+    <button type="button" id="newCatConfirm">新增</button>
+    <button type="button" id="newCatCancel">取消</button>
+  </div>
+  <p class="hint">點卡片上的「各自帶／共用一份 ⇄」標籤可直接切換類型；分類選單最下面可以「＋ 新增分類」</p>
+
+  <div id="listArea"></div>
+
+  <div class="reset-row" id="resetRow">
+    <button id="addSeedBtn" type="button">＋ 補上建議物品清單</button>
+    <button id="unpackAllBtn" type="button">🔄 全部取消打包（保留物品）</button>
+    <button id="resetBtn" type="button">清空全部重新開始</button>
+    <div class="reset-confirm" id="resetConfirm" style="display:none;">
+      <span>確定要清空整份清單嗎？所有人都會受影響。</span>
+      <button type="button" id="resetConfirmYes">是，清空</button>
+      <button type="button" id="resetConfirmNo">取消</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  // ---------- Firebase 設定 ----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyBvPgQRLz3_sJmb2_3yQf0CI4DUf4yw9lU",
+    authDomain: "packing-43bb3.firebaseapp.com",
+    projectId: "packing-43bb3",
+    storageBucket: "packing-43bb3.firebasestorage.app",
+    messagingSenderId: "800069919760",
+    appId: "1:800069919760:web:2173f3754c23355d439695"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // 本地用戶識別碼與暱稱
+  let myId = localStorage.getItem('packing_user_id');
+  if (!myId) {
+    myId = 'u_' + Math.random().toString(36).slice(2, 9);
+    localStorage.setItem('packing_user_id', myId);
+  }
+  let myName = localStorage.getItem('packing_user_name') || ('朋友 ' + myId.slice(-3));
+
+  const DEFAULT_CATEGORIES = ['證件文件', '電子產品', '服裝配件', '盥洗用品', '藥品', '交通住宿', '其他'];
+  const SEED_ITEMS = [
+    { name: '護照、登機證', category: '證件文件', type: 'individual' },
+    { name: '旅遊不便險、醫療險', category: '證件文件', type: 'individual' },
+    { name: '掃描網路esim', category: '證件文件', type: 'individual' },
+    { name: '耳機、充電線、行充', category: '電子產品', type: 'individual' },
+    { name: '轉接頭', category: '電子產品', type: 'shared' },
+    { name: '帽子', category: '服裝配件', type: 'individual' },
+    { name: '墨鏡', category: '服裝配件', type: 'individual' },
+    { name: '陽傘', category: '服裝配件', type: 'shared' },
+    { name: '牙刷牙膏', category: '盥洗用品', type: 'individual' },
+    { name: '便秘、感冒、止痛藥', category: '藥品', type: 'shared' },
+    { name: '住宿預訂單', category: '交通住宿', type: 'shared' },
+    { name: '信用卡2張、現金、交通卡', category: '其他', type: 'individual' }
+  ];
+
+  let meta = { tripName: '', destination: '', departDate: '', customCategories: [] };
+  let itemsById = {};
+  let rosterMap = {}; // { id: { name: '...' } }
+  let activeTab = '全部';
+  let onlyUnpacked = false;
+  let addType = 'individual';
+
+  function showToast(msg) {
+    let toast = document.getElementById('toastMsg');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'toastMsg';
+      toast.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--paper);font-family:var(--font-mono);font-size:12.5px;padding:10px 18px;border-radius:999px;z-index:999;box-shadow:0 4px 16px var(--shadow);opacity:0;transition:opacity 0.25s;';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 2600);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function getItemsArray() {
+    return Object.values(itemsById).sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  function getCategories() {
+    const used = getItemsArray().map(i => i.category);
+    return Array.from(new Set([...DEFAULT_CATEGORIES, ...(meta.customCategories || []), ...used]));
+  }
+
+  function addCustomCategory(name) {
+    name = (name || '').trim();
+    if (!name) return;
+    const next = Array.from(new Set([...(meta.customCategories || []), name]));
+    db.collection('trip').doc('meta').set({ customCategories: next }, { merge: true });
+  }
+
+  function renderHeader() {
+    document.getElementById('tripName').value = meta.tripName || '';
+    document.getElementById('destination').value = meta.destination || '';
+    document.getElementById('departDate').value = meta.departDate || '';
+
+    const items = getItemsArray();
+    let total = 0, done = 0;
+    const rosterIds = Object.keys(rosterMap);
+
+    items.forEach(it => {
+      if (it.type === 'shared') {
+        total += 1;
+        if (it.sharedDone) done += 1;
+      } else {
+        const people = rosterIds.length ? rosterIds : [myId];
+        people.forEach(pid => {
+          total += 1;
+          if (it.individualDone && it.individualDone[pid]) done += 1;
+        });
+      }
+    });
+
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressCount').textContent = `${done} / ${total} 已打包`;
+  }
+
+  function renderPeople() {
+    const row = document.getElementById('peopleRow');
+    row.innerHTML = '';
+    const label = document.createElement('span');
+    label.className = 'people-label';
+    label.textContent = '成員：';
+    row.appendChild(label);
+
+    Object.keys(rosterMap).forEach(pid => {
+      const p = rosterMap[pid];
+      const chip = document.createElement('span');
+      chip.className = 'avatar-chip' + (pid === myId ? ' you' : '');
+      chip.textContent = (p.name || '成員') + (pid === myId ? '（你）' : '');
+      if (pid === myId) {
+        const btn = document.createElement('button');
+        btn.className = 'chip-edit';
+        btn.textContent = '✏️';
+        btn.addEventListener('click', () => {
+          const newName = prompt('請輸入你的名字：', myName);
+          if (newName && newName.trim()) {
+            myName = newName.trim();
+            localStorage.setItem('packing_user_name', myName);
+            db.collection('participants').doc(myId).set({ name: myName }, { merge: true });
+          }
+        });
+        chip.appendChild(btn);
+      }
+      row.appendChild(chip);
+    });
+  }
+
+  function renderCategorySelect() {
+    const sel = document.getElementById('categorySelect');
+    const current = sel.value;
+    sel.innerHTML = '';
+    getCategories().forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat; opt.textContent = cat;
+      sel.appendChild(opt);
+    });
+    const addOpt = document.createElement('option');
+    addOpt.value = '__add__';
+    addOpt.textContent = '＋ 新增分類…';
+    sel.appendChild(addOpt);
+    if (current && getCategories().includes(current)) sel.value = current;
+  }
+
+  function renderAssigneeSelect() {
+    const sel = document.getElementById('assigneeSelect');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">不指定由誰帶</option>';
+    Object.keys(rosterMap).forEach(pid => {
+      const opt = document.createElement('option');
+      opt.value = pid;
+      opt.textContent = (rosterMap[pid].name || '成員') + (pid === myId ? '（你）' : '');
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+  }
+
+  function renderTabs() {
+    const tabs = document.getElementById('tabs');
+    tabs.innerHTML = '';
+    const items = getItemsArray();
+    ['全部', ...getCategories()].forEach(cat => {
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn' + (activeTab === cat ? ' active' : '');
+      const count = cat === '全部' ? items.length : items.filter(i => i.category === cat).length;
+      btn.textContent = count ? `${cat} ${count}` : cat;
+      btn.addEventListener('click', () => { activeTab = cat; renderTabs(); renderList(); });
+      tabs.appendChild(btn);
+    });
+  }
+
+  function isItemDoneForMe(item) {
+    if (item.type === 'shared') return !!item.sharedDone;
+    return !!(item.individualDone && item.individualDone[myId]);
+  }
+
+  function renderList() {
+    const area = document.getElementById('listArea');
+    area.innerHTML = '';
+    const items = getItemsArray();
+
+    if (items.length === 0) {
+      area.innerHTML = '<div class="empty">清單還是空的，開始新增你要帶的東西吧。</div>';
+      return;
+    }
+
+    const visibleItems = onlyUnpacked ? items.filter(i => !isItemDoneForMe(i)) : items;
+    if (onlyUnpacked && visibleItems.length === 0) {
+      area.innerHTML = '<div class="empty">🎉 全部都打包好了！</div>';
+      return;
+    }
+
+    const showCats = activeTab === '全部'
+      ? getCategories().filter(c => visibleItems.some(i => i.category === c))
+      : [activeTab];
+
+    showCats.forEach(cat => {
+      const itemsInCat = visibleItems.filter(i => i.category === cat);
+      if (itemsInCat.length === 0) return;
+
+      if (activeTab === '全部') {
+        const label = document.createElement('div');
+        label.className = 'cat-label';
+        label.innerHTML = `<span>${escapeHtml(cat)}</span><div class="rule"></div>`;
+        area.appendChild(label);
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+      itemsInCat.forEach(item => grid.appendChild(buildCard(item)));
+      area.appendChild(grid);
+    });
+  }
+
+  function buildCard(item) {
+    const done = isItemDoneForMe(item);
+    const card = document.createElement('div');
+    card.className = 'card' + (done ? ' done' : '') + (item.type === 'shared' ? ' shared' : '');
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    const typeBadge = document.createElement('button');
+    typeBadge.type = 'button';
+    typeBadge.className = 'type-badge ' + item.type;
+    typeBadge.textContent = (item.type === 'shared' ? '共用一份' : '各自帶') + ' ⇄';
+    typeBadge.addEventListener('click', () => {
+      if (item.type === 'shared') {
+        db.collection('items').doc(item.id).update({ type: 'individual', assigneeId: null });
+      } else {
+        db.collection('items').doc(item.id).update({ type: 'shared', individualDone: {} });
+      }
+    });
+    body.appendChild(typeBadge);
+
+    const nameInput = document.createElement('input');
+    nameInput.className = 'card-name';
+    nameInput.value = item.name;
+    nameInput.addEventListener('change', (e) => {
+      const v = e.target.value.trim();
+      if (v) db.collection('items').doc(item.id).update({ name: v });
+    });
+    body.appendChild(nameInput);
+
+    if (item.type === 'shared') {
+      const sel = document.createElement('select');
+      sel.className = 'assignee-line-select';
+      sel.innerHTML = '<option value="">尚未指定由誰帶</option>';
+      Object.keys(rosterMap).forEach(pid => {
+        const opt = document.createElement('option');
+        opt.value = pid;
+        opt.textContent = '由 ' + (rosterMap[pid].name || '成員') + ' 帶' + (pid === myId ? '（你）' : '');
+        sel.appendChild(opt);
+      });
+      sel.value = item.assigneeId || '';
+      sel.addEventListener('change', (e) => {
+        db.collection('items').doc(item.id).update({ assigneeId: e.target.value || null });
+      });
+      body.appendChild(sel);
+    } else {
+      const rosterIds = Object.keys(rosterMap);
+      const people = rosterIds.length ? rosterIds : [myId];
+      const doneCount = people.filter(pid => item.individualDone && item.individualDone[pid]).length;
+      const line = document.createElement('div');
+      line.className = 'indiv-progress';
+      line.textContent = `${doneCount}/${people.length} 人已打包`;
+      body.appendChild(line);
+    }
+
+    const footer = document.createElement('div');
+    footer.className = 'card-footer';
+    const packBtn = document.createElement('button');
+    packBtn.className = 'pack-btn';
+    packBtn.textContent = done ? '✓ 已打包' : '未打包';
+    packBtn.addEventListener('click', () => {
+      if (item.type === 'shared') {
+        db.collection('items').doc(item.id).update({ sharedDone: !item.sharedDone });
+      } else {
+        const map = Object.assign({}, item.individualDone || {});
+        map[myId] = !map[myId];
+        db.collection('items').doc(item.id).update({ individualDone: map });
+      }
+    });
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'card-del';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', () => db.collection('items').doc(item.id).delete());
+
+    footer.appendChild(packBtn);
+    footer.appendChild(delBtn);
+    body.appendChild(footer);
+    card.appendChild(body);
+    return card;
+  }
+
+  // ---------- 事件監聽 ----------
+  document.getElementById('filterUnpackedBtn').addEventListener('click', function () {
+    onlyUnpacked = !onlyUnpacked;
+    this.classList.toggle('active', onlyUnpacked);
+    renderList();
+  });
+
+  document.getElementById('categorySelect').addEventListener('change', (e) => {
+    if (e.target.value === '__add__') {
+      document.getElementById('newCatRow').style.display = 'flex';
+      document.getElementById('newCatInput').value = '';
+      document.getElementById('newCatInput').focus();
+      e.target.value = DEFAULT_CATEGORIES[0];
+    }
+  });
+
+  document.getElementById('newCatConfirm').addEventListener('click', () => {
+    const val = document.getElementById('newCatInput').value.trim();
+    if (val) {
+      addCustomCategory(val);
+      document.getElementById('newCatRow').style.display = 'none';
+    }
+  });
+
+  document.getElementById('newCatCancel').addEventListener('click', () => {
+    document.getElementById('newCatRow').style.display = 'none';
+  });
+
+  document.getElementById('addForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = document.getElementById('itemInput');
+    const name = input.value.trim();
+    if (!name) return;
+    const cat = document.getElementById('categorySelect').value;
+    const assignee = document.getElementById('assigneeSelect').value;
+
+    db.collection('items').add({
+      name, category: cat || '其他', type: addType,
+      sharedDone: false, individualDone: {}, assigneeId: assignee || null,
+      order: Date.now()
+    });
+    input.value = '';
+  });
+
+  document.getElementById('typeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-type]');
+    if (!btn) return;
+    addType = btn.dataset.type;
+    document.querySelectorAll('#typeToggle button[data-type]').forEach(b => b.classList.toggle('active', b === btn));
+    document.getElementById('assigneeSelect').style.display = addType === 'shared' ? 'inline-block' : 'none';
+  });
+
+  document.getElementById('tripName').addEventListener('input', (e) => db.collection('trip').doc('meta').set({ tripName: e.target.value }, { merge: true }));
+  document.getElementById('destination').addEventListener('input', (e) => db.collection('trip').doc('meta').set({ destination: e.target.value }, { merge: true }));
+  document.getElementById('departDate').addEventListener('input', (e) => db.collection('trip').doc('meta').set({ departDate: e.target.value }, { merge: true }));
+
+  document.getElementById('addSeedBtn').addEventListener('click', () => {
+    const existing = new Set(getItemsArray().map(i => i.name));
+    SEED_ITEMS.forEach(entry => {
+      if (!existing.has(entry.name)) {
+        db.collection('items').add({
+          name: entry.name, category: entry.category, type: entry.type,
+          sharedDone: false, individualDone: {}, assigneeId: null, order: Date.now() + Math.random()
+        });
+      }
+    });
+    showToast('已補上建議物品');
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    document.getElementById('resetConfirm').style.display = 'flex';
+    document.getElementById('resetBtn').style.display = 'none';
+  });
+  document.getElementById('resetConfirmNo').addEventListener('click', () => {
+    document.getElementById('resetConfirm').style.display = 'none';
+    document.getElementById('resetBtn').style.display = 'inline-block';
+  });
+  document.getElementById('resetConfirmYes').addEventListener('click', async () => {
+    document.getElementById('resetConfirm').style.display = 'none';
+    document.getElementById('resetBtn').style.display = 'inline-block';
+    const snap = await db.collection('items').get();
+    snap.docs.forEach(d => d.ref.delete());
+    db.collection('trip').doc('meta').set({ tripName: '', destination: '', departDate: '', customCategories: [] });
+    showToast('清單已清空');
+  });
+
+  document.getElementById('unpackAllBtn').addEventListener('click', () => {
+    getItemsArray().forEach(item => {
+      db.collection('items').doc(item.id).update({ sharedDone: false, individualDone: {} });
+    });
+    showToast('已重設為未打包');
+  });
+
+  // ---------- 初始化即時監聽 ----------
+  function init() {
+    // 註冊成員
+    db.collection('participants').doc(myId).set({ name: myName }, { merge: true });
+
+    // 監聽成員列表
+    db.collection('participants').onSnapshot(snap => {
+      rosterMap = {};
+      snap.docs.forEach(doc => { rosterMap[doc.id] = doc.data(); });
+      renderPeople();
+      renderAssigneeSelect();
+      renderHeader();
+      renderList();
+    });
+
+    // 監聽行程 Meta
+    db.collection('trip').doc('meta').onSnapshot(snap => {
+      if (snap.exists) meta = snap.data();
+      renderHeader();
+      renderCategorySelect();
+      renderTabs();
+    });
+
+    // 監聽物品清單
+    db.collection('items').orderBy('order', 'asc').onSnapshot(snap => {
+      itemsById = {};
+      snap.docs.forEach(doc => { itemsById[doc.id] = Object.assign({ id: doc.id }, doc.data()); });
+      renderHeader();
+      renderCategorySelect();
+      renderTabs();
+      renderList();
+    });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
