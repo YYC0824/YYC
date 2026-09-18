@@ -8,25 +8,15 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-<!-- 載入 Firebase SDK (Compat 模式，適用於單一 HTML 檔案) -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <style>
   :root {
-    --ink: #33474A;
-    --paper: #EAF4F0;
-    --paper-2: #DCEBE5;
-    --card-bg: #F6FBF9;
-    --tag-string: #82A099;
-    --accent: #6F9A87;
-    --accent-2: #7FA8C9;
-    --shared-color: #7FA8C9;
-    --on-accent: #FBFEFC;
-    --line: #33474A;
-    --line-soft: rgba(51,71,74,0.13);
-    --dot: rgba(51,71,74,0.04);
-    --shadow: rgba(0,0,0,0.08);
+    --ink: #33474A; --paper: #EAF4F0; --paper-2: #DCEBE5; --card-bg: #F6FBF9;
+    --tag-string: #82A099; --accent: #6F9A87; --accent-2: #7FA8C9; --shared-color: #7FA8C9;
+    --on-accent: #FBFEFC; --line: #33474A; --line-soft: rgba(51,71,74,0.13);
+    --dot: rgba(51,71,74,0.04); --shadow: rgba(0,0,0,0.08);
     --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   }
@@ -43,8 +33,7 @@
   body {
     margin: 0; background-color: var(--paper); color: var(--ink);
     background-image: radial-gradient(var(--dot) 1.5px, transparent 1.5px);
-    background-size: 24px 24px;
-    font-family: var(--font-display); min-height: 100vh;
+    background-size: 24px 24px; font-family: var(--font-display); min-height: 100vh;
     padding: 32px 16px 80px; transition: background-color 0.3s, color 0.3s;
   }
   .wrap { max-width: 780px; margin: 0 auto; }
@@ -53,12 +42,6 @@
     margin-bottom: 18px; border: 1.5px solid var(--line-soft);
   }
   .hero-illustration svg { width: 100%; height: 100%; display: block; }
-  .banner {
-    display: none; background: var(--paper-2); border: 1.5px dashed var(--line);
-    border-radius: 10px; padding: 12px 16px; margin-bottom: 18px;
-    font-size: 13px; line-height: 1.5;
-  }
-  .banner.show { display: block; }
   .tag {
     position: relative; background: var(--paper-2); border: 1.5px solid var(--line);
     border-radius: 14px; padding: 28px 26px 22px; margin-bottom: 18px;
@@ -74,8 +57,7 @@
   .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--accent-2); margin: 0 0 6px 22px; }
   .trip-name {
     font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.15;
-    border: none; background: transparent; color: var(--ink); width: 100%;
-    padding: 0 0 0 22px; outline: none;
+    border: none; background: transparent; color: var(--ink); width: 100%; padding: 0 0 0 22px; outline: none;
   }
   .meta-row { display: flex; gap: 14px; margin: 14px 0 16px 22px; flex-wrap: wrap; }
   .meta-field { display: flex; flex-direction: column; gap: 3px; }
@@ -88,20 +70,21 @@
   .people-row { display: flex; align-items: center; gap: 8px; margin: 0 22px 16px; flex-wrap: wrap; }
   .people-label { font-family: var(--font-mono); font-size: 10px; opacity: 0.55; margin-right: 2px; }
   .avatar-chip {
-    display: flex; align-items: center; gap: 5px;
-    background: var(--card-bg); border: 1px solid var(--line-soft);
-    border-radius: 999px; padding: 4px 10px; font-size: 11.5px;
+    display: flex; align-items: center; gap: 5px; background: var(--card-bg);
+    border: 1px solid var(--line-soft); border-radius: 999px; padding: 4px 10px; font-size: 11.5px;
   }
   .avatar-chip.you { border-color: var(--accent); font-weight: 600; }
-  .chip-edit { border: none; background: transparent; cursor: pointer; opacity: 0.5; font-size: 10px; }
+  .chip-btn { border: none; background: transparent; cursor: pointer; opacity: 0.5; font-size: 10px; padding: 0 2px; }
+  .chip-del { opacity: 0.4; font-size: 11px; }
+  .chip-del:hover { opacity: 1; color: #d9534f; }
   .stats-row { margin: 0 22px; }
   .stat-label { font-family: var(--font-mono); font-size: 11px; opacity: 0.6; margin-bottom: 4px; }
   .progress-line { display: flex; align-items: center; gap: 10px; }
   .progress-track { flex: 1; height: 6px; background: var(--line-soft); border-radius: 3px; overflow: hidden; }
   .progress-fill { height: 100%; background: var(--accent-2); width: 0%; transition: width 0.35s ease; border-radius: 3px; }
   .progress-count { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; opacity: 0.8; }
-  .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 2px 4px; margin-bottom: 6px; }
   .tabs-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 2px 4px; margin-bottom: 6px; }
   .filter-btn {
     flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; padding: 8px 14px;
     border: 1.5px solid var(--line-soft); border-radius: 999px; background: transparent;
@@ -117,15 +100,15 @@
   .add-form { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
   .add-form input[type="text"] {
     flex: 1 1 160px; min-width: 0; padding: 12px 14px; border: 1.5px solid var(--line);
-    border-radius: 9px; background: var(--paper-2); color: var(--ink);
+    border-radius: 999px; background: var(--paper-2); color: var(--ink);
     font-family: var(--font-display); font-size: 15px; outline: none;
   }
   .add-form select {
-    padding: 12px 10px; border: 1.5px solid var(--line); border-radius: 9px;
+    padding: 12px 10px; border: 1.5px solid var(--line); border-radius: 999px;
     background: var(--paper-2); color: var(--ink); font-family: var(--font-mono); font-size: 13px; outline: none;
   }
   .add-form button {
-    padding: 12px 20px; border: 1.5px solid var(--line); border-radius: 9px;
+    padding: 12px 20px; border: 1.5px solid var(--line); border-radius: 999px;
     background: var(--accent); color: var(--on-accent); font-family: var(--font-display);
     font-weight: 600; font-size: 15px; cursor: pointer;
   }
@@ -230,8 +213,6 @@
     </svg>
   </div>
 
-  <div class="banner" id="banner"></div>
-
   <div class="tag">
     <p class="eyebrow">PACKING · 行李清單</p>
     <input class="trip-name" id="tripName" placeholder="這趟旅程叫什麼名字？" />
@@ -272,7 +253,7 @@
     <button type="button" id="newCatConfirm">新增</button>
     <button type="button" id="newCatCancel">取消</button>
   </div>
-  <p class="hint">點卡片上的「各自帶／共用一份 ⇄」標籤可直接切換類型；分類選單最下面可以「＋ 新增分類」</p>
+  <p class="hint">點卡片上的「各自帶／共用一份 ⇄」標籤可切換類型；點成員名字旁的 ✕ 可移除多餘成員。</p>
 
   <div id="listArea"></div>
 
@@ -291,7 +272,6 @@
 
 <script>
 (function () {
-  // ---------- Firebase 設定 ----------
   const firebaseConfig = {
     apiKey: "AIzaSyBvPgQRLz3_sJmb2_3yQf0CI4DUf4yw9lU",
     authDomain: "packing-43bb3.firebaseapp.com",
@@ -304,7 +284,6 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
 
-  // 本地用戶識別碼與暱稱
   let myId = localStorage.getItem('packing_user_id');
   if (!myId) {
     myId = 'u_' + Math.random().toString(36).slice(2, 9);
@@ -330,7 +309,7 @@
 
   let meta = { tripName: '', destination: '', departDate: '', customCategories: [] };
   let itemsById = {};
-  let rosterMap = {}; // { id: { name: '...' } }
+  let rosterMap = {};
   let activeTab = '全部';
   let onlyUnpacked = false;
   let addType = 'individual';
@@ -411,9 +390,10 @@
       const chip = document.createElement('span');
       chip.className = 'avatar-chip' + (pid === myId ? ' you' : '');
       chip.textContent = (p.name || '成員') + (pid === myId ? '（你）' : '');
+      
       if (pid === myId) {
         const btn = document.createElement('button');
-        btn.className = 'chip-edit';
+        btn.className = 'chip-btn';
         btn.textContent = '✏️';
         btn.addEventListener('click', () => {
           const newName = prompt('請輸入你的名字：', myName);
@@ -425,6 +405,19 @@
         });
         chip.appendChild(btn);
       }
+
+      // 新增：刪除成員按鈕
+      const delBtn = document.createElement('button');
+      delBtn.className = 'chip-btn chip-del';
+      delBtn.textContent = '✕';
+      delBtn.title = '移除此成員';
+      delBtn.addEventListener('click', () => {
+        if (confirm(`確定要從成員清單移除「${p.name || '成員'}」嗎？`)) {
+          db.collection('participants').doc(pid).delete();
+        }
+      });
+      chip.appendChild(delBtn);
+
       row.appendChild(chip);
     });
   }
@@ -597,7 +590,6 @@
     return card;
   }
 
-  // ---------- 事件監聽 ----------
   document.getElementById('filterUnpackedBtn').addEventListener('click', function () {
     onlyUnpacked = !onlyUnpacked;
     this.classList.toggle('active', onlyUnpacked);
@@ -690,12 +682,9 @@
     showToast('已重設為未打包');
   });
 
-  // ---------- 初始化即時監聽 ----------
   function init() {
-    // 註冊成員
     db.collection('participants').doc(myId).set({ name: myName }, { merge: true });
 
-    // 監聽成員列表
     db.collection('participants').onSnapshot(snap => {
       rosterMap = {};
       snap.docs.forEach(doc => { rosterMap[doc.id] = doc.data(); });
@@ -705,7 +694,6 @@
       renderList();
     });
 
-    // 監聽行程 Meta
     db.collection('trip').doc('meta').onSnapshot(snap => {
       if (snap.exists) meta = snap.data();
       renderHeader();
@@ -713,7 +701,6 @@
       renderTabs();
     });
 
-    // 監聽物品清單
     db.collection('items').orderBy('order', 'asc').onSnapshot(snap => {
       itemsById = {};
       snap.docs.forEach(doc => { itemsById[doc.id] = Object.assign({ id: doc.id }, doc.data()); });
