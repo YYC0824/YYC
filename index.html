@@ -85,12 +85,18 @@
   .progress-count { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; opacity: 0.8; }
   .tabs-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 2px 4px; margin-bottom: 6px; }
+  .filter-group { display: flex; gap: 6px; flex-wrap: wrap; }
   .filter-btn {
-    flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; padding: 8px 14px;
+    flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; padding: 8px 12px;
     border: 1.5px solid var(--line-soft); border-radius: 999px; background: transparent;
     color: var(--ink); cursor: pointer; opacity: 0.75; margin-top: 2px;
   }
   .filter-btn.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); opacity: 1; }
+  .action-btn {
+    flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; padding: 8px 12px;
+    border: 1.5px solid var(--accent-2); border-radius: 999px; background: transparent;
+    color: var(--ink); cursor: pointer; margin-top: 2px;
+  }
   .tab-btn {
     flex-shrink: 0; font-family: var(--font-mono); font-size: 12.5px; padding: 8px 14px;
     border: 1.5px solid var(--line); border-radius: 999px; background: transparent;
@@ -232,7 +238,11 @@
 
   <div class="tabs-row">
     <div class="tabs" id="tabs"></div>
-    <button type="button" id="filterUnpackedBtn" class="filter-btn">📦 只看未打包</button>
+    <div class="filter-group">
+      <button type="button" id="filterOnlyMineBtn" class="filter-btn">👤 只看我的</button>
+      <button type="button" id="filterUnpackedBtn" class="filter-btn">📦 只看未打包</button>
+      <button type="button" id="copyLineBtn" class="action-btn">📋 複製 LINE 清單</button>
+    </div>
   </div>
 
   <form class="add-form" id="addForm">
@@ -312,6 +322,7 @@
   let rosterMap = {};
   let activeTab = '全部';
   let onlyUnpacked = false;
+  let onlyMine = false;
   let addType = 'individual';
 
   function showToast(msg) {
@@ -406,7 +417,6 @@
         chip.appendChild(btn);
       }
 
-      // 新增：刪除成員按鈕
       const delBtn = document.createElement('button');
       delBtn.className = 'chip-btn chip-del';
       delBtn.textContent = '✕';
@@ -470,28 +480,40 @@
     return !!(item.individualDone && item.individualDone[myId]);
   }
 
+  function isItemMine(item) {
+    if (item.type === 'individual') return true;
+    return item.assigneeId === myId;
+  }
+
   function renderList() {
     const area = document.getElementById('listArea');
     area.innerHTML = '';
-    const items = getItemsArray();
+    let items = getItemsArray();
 
     if (items.length === 0) {
       area.innerHTML = '<div class="empty">清單還是空的，開始新增你要帶的東西吧。</div>';
       return;
     }
 
-    const visibleItems = onlyUnpacked ? items.filter(i => !isItemDoneForMe(i)) : items;
-    if (onlyUnpacked && visibleItems.length === 0) {
-      area.innerHTML = '<div class="empty">🎉 全部都打包好了！</div>';
+    if (onlyMine) {
+      items = items.filter(i => isItemMine(i));
+    }
+
+    if (onlyUnpacked) {
+      items = items.filter(i => !isItemDoneForMe(i));
+    }
+
+    if (items.length === 0) {
+      area.innerHTML = '<div class="empty">🎉 沒有符合條件的物品！</div>';
       return;
     }
 
     const showCats = activeTab === '全部'
-      ? getCategories().filter(c => visibleItems.some(i => i.category === c))
+      ? getCategories().filter(c => items.some(i => i.category === c))
       : [activeTab];
 
     showCats.forEach(cat => {
-      const itemsInCat = visibleItems.filter(i => i.category === cat);
+      const itemsInCat = items.filter(i => i.category === cat);
       if (itemsInCat.length === 0) return;
 
       if (activeTab === '全部') {
@@ -590,10 +612,55 @@
     return card;
   }
 
+  // 篩選切換：只看我的
+  document.getElementById('filterOnlyMineBtn').addEventListener('click', function () {
+    onlyMine = !onlyMine;
+    this.classList.toggle('active', onlyMine);
+    renderList();
+  });
+
+  // 篩選切換：只看未打包
   document.getElementById('filterUnpackedBtn').addEventListener('click', function () {
     onlyUnpacked = !onlyUnpacked;
     this.classList.toggle('active', onlyUnpacked);
     renderList();
+  });
+
+  // 複製 LINE 文字清單
+  document.getElementById('copyLineBtn').addEventListener('click', () => {
+    const items = getItemsArray();
+    const tripTitle = meta.tripName || '旅遊行李清單';
+    const dest = meta.destination ? `📍 目的地：${meta.destination}\n` : '';
+    const date = meta.departDate ? `📅 出發日：${meta.departDate}\n` : '';
+
+    const myUnpacked = items.filter(i => i.type === 'individual' && !isItemDoneForMe(i));
+    const sharedUnpacked = items.filter(i => i.type === 'shared' && !i.sharedDone);
+
+    let text = `✈️ 【${tripTitle}】打包提醒\n${dest}${date}\n`;
+
+    if (myUnpacked.length > 0) {
+      text += `👤 個人尚未打包 (${myUnpacked.length}項)：\n` + myUnpacked.map(i => ` • ${i.name}`).join('\n') + '\n\n';
+    } else {
+      text += `👤 個人物品：全數打包完畢！🎉\n\n`;
+    }
+
+    if (sharedUnpacked.length > 0) {
+      text += `👥 共用物品尚未打包 (${sharedUnpacked.length}項)：\n`;
+      text += sharedUnpacked.map(i => {
+        const assignee = i.assigneeId && rosterMap[i.assigneeId] ? ` (${rosterMap[i.assigneeId].name}負責)` : ' (未指定)';
+        return ` • ${i.name}${assignee}`;
+      }).join('\n') + '\n';
+    } else {
+      text += `👥 共用物品：全數準備齊全！🎉\n`;
+    }
+
+    text += `\n🔗 開啟網頁同步進度：\n${window.location.href}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('已複製 LINE 文字清單！');
+    }).catch(() => {
+      showToast('複製失敗，請手動複製');
+    });
   });
 
   document.getElementById('categorySelect').addEventListener('change', (e) => {
