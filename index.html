@@ -100,9 +100,11 @@
   .tab-btn {
     flex-shrink: 0; font-family: var(--font-mono); font-size: 12.5px; padding: 8px 14px;
     border: 1.5px solid var(--line); border-radius: 999px; background: transparent;
-    color: var(--ink); cursor: pointer; white-space: nowrap;
+    color: var(--ink); cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px;
   }
   .tab-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .cat-edit-icon { opacity: 0.4; font-size: 10px; margin-left: 2px; }
+  .tab-btn:hover .cat-edit-icon { opacity: 1; }
   .add-form { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
   .add-form input[type="text"] {
     flex: 1 1 160px; min-width: 0; padding: 12px 14px; border: 1.5px solid var(--line);
@@ -263,7 +265,7 @@
     <button type="button" id="newCatConfirm">新增</button>
     <button type="button" id="newCatCancel">取消</button>
   </div>
-  <p class="hint">點卡片上的「各自帶／共用一份 ⇄」標籤可切換類型；點成員名字旁的 ✕ 可移除多餘成員。</p>
+  <p class="hint">點擊分類標籤旁的 ✏️ 可重命名或刪除分類；點卡片上的「各自帶／共用一份 ⇄」可切換類型。</p>
 
   <div id="listArea"></div>
 
@@ -317,7 +319,7 @@
     { name: '信用卡2張、現金、交通卡', category: '其他', type: 'individual' }
   ];
 
-  let meta = { tripName: '', destination: '', departDate: '', customCategories: [] };
+  let meta = { tripName: '', destination: '', departDate: '', categoriesList: null };
   let itemsById = {};
   let rosterMap = {};
   let activeTab = '全部';
@@ -350,15 +352,24 @@
   }
 
   function getCategories() {
+    if (meta.categoriesList && Array.isArray(meta.categoriesList) && meta.categoriesList.length > 0) {
+      return meta.categoriesList;
+    }
     const used = getItemsArray().map(i => i.category);
-    return Array.from(new Set([...DEFAULT_CATEGORIES, ...(meta.customCategories || []), ...used]));
+    return Array.from(new Set([...DEFAULT_CATEGORIES, ...used]));
+  }
+
+  function updateCategoriesList(newList) {
+    db.collection('trip').doc('meta').set({ categoriesList: newList }, { merge: true });
   }
 
   function addCustomCategory(name) {
     name = (name || '').trim();
     if (!name) return;
-    const next = Array.from(new Set([...(meta.customCategories || []), name]));
-    db.collection('trip').doc('meta').set({ customCategories: next }, { merge: true });
+    const current = getCategories();
+    if (!current.includes(name)) {
+      updateCategoriesList([...current, name]);
+    }
   }
 
   function renderHeader() {
@@ -465,14 +476,67 @@
     const tabs = document.getElementById('tabs');
     tabs.innerHTML = '';
     const items = getItemsArray();
-    ['全部', ...getCategories()].forEach(cat => {
+    const categories = getCategories();
+
+    ['全部', ...categories].forEach(cat => {
       const btn = document.createElement('button');
       btn.className = 'tab-btn' + (activeTab === cat ? ' active' : '');
       const count = cat === '全部' ? items.length : items.filter(i => i.category === cat).length;
-      btn.textContent = count ? `${cat} ${count}` : cat;
+      
+      let textSpan = document.createElement('span');
+      textSpan.textContent = count ? `${cat} ${count}` : cat;
+      btn.appendChild(textSpan);
+
+      if (cat !== '全部') {
+        const editSpan = document.createElement('span');
+        editSpan.className = 'cat-edit-icon';
+        editSpan.textContent = '✏️';
+        editSpan.title = '管理此分類';
+        editSpan.addEventListener('click', (e) => {
+          e.stopPropagation();
+          manageCategory(cat);
+        });
+        btn.appendChild(editSpan);
+      }
+
       btn.addEventListener('click', () => { activeTab = cat; renderTabs(); renderList(); });
       tabs.appendChild(btn);
     });
+  }
+
+  function manageCategory(catName) {
+    const action = prompt(`管理分類【${catName}】\n\n1. 輸入新名稱可進行「重命名」\n2. 輸入「delete」或清空文字可「刪除分類」`, catName);
+    if (action === null) return; // 取消
+
+    const trimmed = action.trim();
+    const currentCats = getCategories();
+
+    if (trimmed === '' || trimmed.toLowerCase() === 'delete') {
+      if (confirm(`確定要刪除分類【${catName}】嗎？該分類下的物品將會自動移至「其他」。`)) {
+        const nextCats = currentCats.filter(c => c !== catName);
+        if (!nextCats.includes('其他')) nextCats.push('其他');
+        updateCategoriesList(nextCats);
+
+        // 將舊分類物品搬到「其他」
+        getItemsArray().filter(i => i.category === catName).forEach(item => {
+          db.collection('items').doc(item.id).update({ category: '其他' });
+        });
+
+        if (activeTab === catName) activeTab = '全部';
+        showToast(`已刪除分類【${catName}】`);
+      }
+    } else if (trimmed !== catName) {
+      const nextCats = currentCats.map(c => c === catName ? trimmed : c);
+      updateCategoriesList(nextCats);
+
+      // 更新該分類下的物品
+      getItemsArray().filter(i => i.category === catName).forEach(item => {
+        db.collection('items').doc(item.id).update({ category: trimmed });
+      });
+
+      if (activeTab === catName) activeTab = trimmed;
+      showToast(`已更新為【${trimmed}】`);
+    }
   }
 
   function isItemDoneForMe(item) {
@@ -612,21 +676,18 @@
     return card;
   }
 
-  // 篩選切換：只看我的
   document.getElementById('filterOnlyMineBtn').addEventListener('click', function () {
     onlyMine = !onlyMine;
     this.classList.toggle('active', onlyMine);
     renderList();
   });
 
-  // 篩選切換：只看未打包
   document.getElementById('filterUnpackedBtn').addEventListener('click', function () {
     onlyUnpacked = !onlyUnpacked;
     this.classList.toggle('active', onlyUnpacked);
     renderList();
   });
 
-  // 複製 LINE 文字清單
   document.getElementById('copyLineBtn').addEventListener('click', () => {
     const items = getItemsArray();
     const tripTitle = meta.tripName || '旅遊行李清單';
@@ -738,7 +799,7 @@
     document.getElementById('resetBtn').style.display = 'inline-block';
     const snap = await db.collection('items').get();
     snap.docs.forEach(d => d.ref.delete());
-    db.collection('trip').doc('meta').set({ tripName: '', destination: '', departDate: '', customCategories: [] });
+    db.collection('trip').doc('meta').set({ tripName: '', destination: '', departDate: '', categoriesList: null });
     showToast('清單已清空');
   });
 
