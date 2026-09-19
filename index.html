@@ -73,10 +73,15 @@
     display: flex; align-items: center; gap: 5px; background: var(--card-bg);
     border: 1px solid var(--line-soft); border-radius: 999px; padding: 4px 10px; font-size: 11.5px;
   }
-  .avatar-chip.you { border-color: var(--accent); font-weight: 600; }
+  .avatar-chip.you { border-color: var(--accent); font-weight: 600; background: var(--paper-2); }
   .chip-btn { border: none; background: transparent; cursor: pointer; opacity: 0.5; font-size: 10px; padding: 0 2px; }
   .chip-del { opacity: 0.4; font-size: 11px; }
   .chip-del:hover { opacity: 1; color: #d9534f; }
+  .switch-user-btn {
+    font-family: var(--font-mono); font-size: 11px; border: 1px dashed var(--line);
+    border-radius: 999px; background: transparent; color: var(--ink); padding: 4px 10px;
+    cursor: pointer; opacity: 0.8; margin-left: 4px;
+  }
   .stats-row { margin: 0 22px; }
   .stat-label { font-family: var(--font-mono); font-size: 11px; opacity: 0.6; margin-bottom: 4px; }
   .progress-line { display: flex; align-items: center; gap: 10px; }
@@ -192,6 +197,29 @@
     border-radius: 7px; cursor: pointer; border: 1.5px solid var(--line);
   }
   #resetConfirmYes { background: var(--accent-2); color: var(--on-accent); border-color: var(--accent-2); }
+  
+  /* Modal彈窗樣式 */
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;
+    z-index: 1000; padding: 16px; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: auto; }
+  .modal-card {
+    background: var(--paper); border: 1.5px solid var(--line); border-radius: 16px;
+    width: 100%; max-width: 380px; padding: 22px; box-shadow: 0 10px 30px var(--shadow);
+  }
+  .modal-title { font-size: 18px; font-weight: 700; margin: 0 0 12px; }
+  .modal-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; max-height: 200px; overflow-y: auto; }
+  .modal-user-item {
+    display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+    border: 1px solid var(--line-soft); border-radius: 10px; background: var(--card-bg); cursor: pointer;
+  }
+  .modal-user-item:hover { border-color: var(--accent); }
+  .modal-btn {
+    width: 100%; padding: 10px; border: 1.5px solid var(--line); border-radius: 10px;
+    background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer; margin-top: 6px;
+  }
 </style>
 </head>
 <body>
@@ -280,6 +308,16 @@
     </div>
   </div>
 
+</div>
+
+<!-- 切換身分 Modal -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal-card">
+    <div class="modal-title">選擇或切換你的身分</div>
+    <p style="font-size:12px;opacity:0.7;margin-bottom:12px;">選擇你在這趟旅程中的名字，手機與電腦將同步為同一人：</p>
+    <div class="modal-list" id="modalUserList"></div>
+    <button type="button" class="modal-btn" id="modalNewUserBtn">＋ 建立新身分</button>
+  </div>
 </div>
 
 <script>
@@ -417,6 +455,7 @@
         const btn = document.createElement('button');
         btn.className = 'chip-btn';
         btn.textContent = '✏️';
+        btn.title = '修改名字';
         btn.addEventListener('click', () => {
           const newName = prompt('請輸入你的名字：', myName);
           if (newName && newName.trim()) {
@@ -441,7 +480,60 @@
 
       row.appendChild(chip);
     });
+
+    const switchBtn = document.createElement('button');
+    switchBtn.className = 'switch-user-btn';
+    switchBtn.textContent = '🔄 切換身分';
+    switchBtn.addEventListener('click', openUserModal);
+    row.appendChild(switchBtn);
   }
+
+  function openUserModal() {
+    const list = document.getElementById('modalUserList');
+    list.innerHTML = '';
+
+    Object.keys(rosterMap).forEach(pid => {
+      const p = rosterMap[pid];
+      const item = document.createElement('div');
+      item.className = 'modal-user-item';
+      item.innerHTML = `<span>${escapeHtml(p.name || '成員')}${pid === myId ? ' (目前選取)' : ''}</span><span style="font-size:12px;opacity:0.6;">選擇</span>`;
+      item.addEventListener('click', () => {
+        myId = pid;
+        myName = p.name || '成員';
+        localStorage.setItem('packing_user_id', myId);
+        localStorage.setItem('packing_user_name', myName);
+        closeUserModal();
+        renderPeople();
+        renderHeader();
+        renderList();
+        showToast(`已切換身分為【${myName}】`);
+      });
+      list.appendChild(item);
+    });
+
+    document.getElementById('userModal').classList.add('open');
+  }
+
+  function closeUserModal() {
+    document.getElementById('userModal').classList.remove('open');
+  }
+
+  document.getElementById('modalNewUserBtn').addEventListener('click', () => {
+    const name = prompt('請輸入新成員名字：');
+    if (name && name.trim()) {
+      myId = 'u_' + Math.random().toString(36).slice(2, 9);
+      myName = name.trim();
+      localStorage.setItem('packing_user_id', myId);
+      localStorage.setItem('packing_user_name', myName);
+      db.collection('participants').doc(myId).set({ name: myName }, { merge: true });
+      closeUserModal();
+      showToast(`已建立並切換為【${myName}】`);
+    }
+  });
+
+  document.getElementById('userModal').addEventListener('click', (e) => {
+    if (e.target.id === 'userModal') closeUserModal();
+  });
 
   function renderCategorySelect() {
     const sel = document.getElementById('categorySelect');
@@ -506,7 +598,7 @@
 
   function manageCategory(catName) {
     const action = prompt(`管理分類【${catName}】\n\n1. 輸入新名稱可進行「重命名」\n2. 輸入「delete」或清空文字可「刪除分類」`, catName);
-    if (action === null) return; // 取消
+    if (action === null) return;
 
     const trimmed = action.trim();
     const currentCats = getCategories();
@@ -517,7 +609,6 @@
         if (!nextCats.includes('其他')) nextCats.push('其他');
         updateCategoriesList(nextCats);
 
-        // 將舊分類物品搬到「其他」
         getItemsArray().filter(i => i.category === catName).forEach(item => {
           db.collection('items').doc(item.id).update({ category: '其他' });
         });
@@ -529,7 +620,6 @@
       const nextCats = currentCats.map(c => c === catName ? trimmed : c);
       updateCategoriesList(nextCats);
 
-      // 更新該分類下的物品
       getItemsArray().filter(i => i.category === catName).forEach(item => {
         db.collection('items').doc(item.id).update({ category: trimmed });
       });
